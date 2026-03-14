@@ -17,9 +17,23 @@ public class MySQLOptions implements DBMSSpecificOptions<MySQLOracleFactory> {
     @Parameter(names = "--oracle")
     public List<MySQLOracleFactory> oracles = Arrays.asList(MySQLOracleFactory.TLP_WHERE);
 
+    @Parameter(names = "--mysql-bombard", description = "Run a MySQL-only stress mode that generates and executes SQL directly over JDBC", arity = 1)
+    private boolean mysqlBombard;
+
+    @Parameter(names = "--mysql-bombard-workers", description = "Number of worker threads to run per database in MySQL bombard mode")
+    private int mysqlBombardWorkers = 4;
+
     @Override
     public List<MySQLOracleFactory> getTestOracleFactory() {
         return oracles;
+    }
+
+    public boolean isMySQLBombard() {
+        return mysqlBombard;
+    }
+
+    public int getMySQLBombardWorkers() {
+        return mysqlBombardWorkers;
     }
 
 }

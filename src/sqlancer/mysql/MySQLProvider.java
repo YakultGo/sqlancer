@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -23,6 +24,7 @@ import sqlancer.common.query.SQLQueryAdapter;
 import sqlancer.common.query.SQLQueryProvider;
 import sqlancer.mysql.MySQLSchema.MySQLColumn;
 import sqlancer.mysql.MySQLSchema.MySQLTable;
+import sqlancer.mysql.gen.MySQLRandomQuerySynthesizer;
 import sqlancer.mysql.gen.MySQLAlterTable;
 import sqlancer.mysql.gen.MySQLDeleteGenerator;
 import sqlancer.mysql.gen.MySQLDropIndex;
@@ -137,6 +139,25 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
         return nrPerformed;
     }
 
+    public SQLQueryAdapter getQueryForBombard(MySQLGlobalState globalState, long workerId, long sequence)
+            throws Exception {
+        if (globalState.getSchema().getDatabaseTables().isEmpty() || Randomly.getBooleanWithSmallProbability()) {
+            return MySQLTableGenerator.generate(globalState, getBombardTableName(workerId, sequence));
+        }
+        if (Randomly.getBoolean()) {
+            String query = MySQLVisitor
+                    .asString(MySQLRandomQuerySynthesizer.generate(globalState, Randomly.smallNumber() + 1)) + ";";
+            return new SQLQueryAdapter(query);
+        }
+        List<Action> eligibleActions = Arrays.stream(Action.values()).filter(action -> action != Action.RESET)
+                .collect(Collectors.toList());
+        return Randomly.fromList(eligibleActions).getQuery(globalState);
+    }
+
+    private static String getBombardTableName(long workerId, long sequence) {
+        return String.format("tb%d_%d", workerId, sequence);
+    }
+
     @Override
     public void generateDatabase(MySQLGlobalState globalState) throws Exception {
         while (globalState.getSchema().getDatabaseTables().size() < Randomly.getNotCachedInteger(1, 2)) {
@@ -173,23 +194,17 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
 
     @Override
     public SQLConnection createDatabase(MySQLGlobalState globalState) throws SQLException {
-        String username = globalState.getOptions().getUserName();
-        String password = globalState.getOptions().getPassword();
-        String host = globalState.getOptions().getHost();
-        int port = globalState.getOptions().getPort();
-        if (host == null) {
-            host = MySQLOptions.DEFAULT_HOST;
-        }
-        if (port == MainOptions.NO_SET_PORT) {
-            port = MySQLOptions.DEFAULT_PORT;
-        }
         String databaseName = globalState.getDatabaseName();
         globalState.getState().logStatement("DROP DATABASE IF EXISTS " + databaseName);
         globalState.getState().logStatement("CREATE DATABASE " + databaseName);
         globalState.getState().logStatement("USE " + databaseName);
-        String url = String.format("jdbc:mysql://%s:%d?serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true",
-                host, port);
-        Connection con = DriverManager.getConnection(url, username, password);
+        return createDatabase(globalState.getOptions(), databaseName);
+    }
+
+    public SQLConnection createDatabase(MainOptions options, String databaseName) throws SQLException {
+        Connection con = DriverManager.getConnection(createBaseJdbcUrl(options)
+                + "?serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true", options.getUserName(),
+                options.getPassword());
         try (Statement s = con.createStatement()) {
             s.execute("DROP DATABASE IF EXISTS " + databaseName);
         }
@@ -200,6 +215,29 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
             s.execute("USE " + databaseName);
         }
         return new SQLConnection(con);
+    }
+
+    public SQLConnection createDatabaseConnection(MainOptions options, String databaseName) throws SQLException {
+        Connection con = DriverManager.getConnection(createDatabaseJdbcUrl(options, databaseName), options.getUserName(),
+                options.getPassword());
+        return new SQLConnection(con);
+    }
+
+    private String createBaseJdbcUrl(MainOptions options) {
+        String host = options.getHost();
+        int port = options.getPort();
+        if (host == null) {
+            host = MySQLOptions.DEFAULT_HOST;
+        }
+        if (port == MainOptions.NO_SET_PORT) {
+            port = MySQLOptions.DEFAULT_PORT;
+        }
+        return String.format("jdbc:mysql://%s:%d", host, port);
+    }
+
+    private String createDatabaseJdbcUrl(MainOptions options, String databaseName) {
+        return String.format("%s/%s?serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true",
+                createBaseJdbcUrl(options), databaseName);
     }
 
     @Override

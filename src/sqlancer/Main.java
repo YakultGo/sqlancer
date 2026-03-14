@@ -27,6 +27,8 @@ import com.beust.jcommander.JCommander.Builder;
 import sqlancer.common.log.Loggable;
 import sqlancer.common.query.Query;
 import sqlancer.common.query.SQLancerResultSet;
+import sqlancer.mysql.MySQLBombard;
+import sqlancer.mysql.MySQLOptions;
 import sqlancer.mysql.MySQLProvider;
 
 public final class Main {
@@ -607,6 +609,8 @@ public final class Main {
 
         ExecutorService execService = Executors.newFixedThreadPool(options.getNumberConcurrentThreads());
         DBMSExecutorFactory<?, ?, ?> executorFactory = nameToProvider.get(jc.getParsedCommand());
+        boolean mysqlBombardMode = executorFactory.getCommand() instanceof MySQLOptions
+                && ((MySQLOptions) executorFactory.getCommand()).isMySQLBombard();
 
         if (options.performConnectionTest()) {
             try {
@@ -640,6 +644,12 @@ public final class Main {
                 private void runThread(final String databaseName) {
                     Randomly r = new Randomly(seed);
                     try {
+                        if (mysqlBombardMode) {
+                            if (!runMySQLBombard(options, executorFactory, databaseName, seed)) {
+                                someOneFails.set(true);
+                            }
+                            return;
+                        }
                         int maxNrDbs = options.getMaxGeneratedDatabases();
                         // run without a limit if maxNrDbs == -1
                         for (int i = 0; i < maxNrDbs || maxNrDbs == -1; i++) {
@@ -654,6 +664,19 @@ public final class Main {
                         if (threadsShutdown.get() == options.getTotalNumberTries()) {
                             execService.shutdown();
                         }
+                    }
+                }
+
+                private boolean runMySQLBombard(MainOptions options, DBMSExecutorFactory<?, ?, ?> executorFactory,
+                        final String databaseName, long seed) {
+                    try {
+                        MySQLProvider provider = (MySQLProvider) executorFactory.getProvider();
+                        MySQLOptions mysqlOptions = (MySQLOptions) executorFactory.getCommand();
+                        new MySQLBombard(provider, options, mysqlOptions, databaseName, seed).run();
+                        return true;
+                    } catch (Throwable t) {
+                        t.printStackTrace();
+                        return false;
                     }
                 }
 
@@ -727,6 +750,7 @@ public final class Main {
         if (providers.isEmpty()) {
             System.err.println(
                     "No DBMS implementations (i.e., instantiations of the DatabaseProvider class) were found. You likely ran into an issue described in https://github.com/sqlancer/sqlancer/issues/799. As a workaround, I now statically load all supported providers as of June 7, 2023.");
+
             providers.add(new MySQLProvider());
         }
     }
