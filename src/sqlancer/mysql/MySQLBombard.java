@@ -17,7 +17,6 @@ import sqlancer.common.query.SQLQueryAdapter;
 public final class MySQLBombard {
 
     private static final int SCHEMA_REFRESH_INTERVAL = 100;
-    private static final long RECONNECT_SLEEP_MS = 250L;
 
     private final MySQLProvider provider;
     private final MainOptions options;
@@ -65,7 +64,9 @@ public final class MySQLBombard {
         long sequence = 0;
         long refreshCounter = 0;
         try {
-            reconnect(state);
+            if (!connect(state)) {
+                return;
+            }
             while (!Thread.currentThread().isInterrupted()) {
                 try {
                     SQLQueryAdapter query = provider.getQueryForBombard(state, workerId, sequence++);
@@ -82,7 +83,7 @@ public final class MySQLBombard {
                 } catch (SQLException e) {
                     Main.nrUnsuccessfulActions.incrementAndGet();
                     if (isConnectionException(e)) {
-                        reconnect(state);
+                        return;
                     } else {
                         refreshSchemaQuietly(state);
                     }
@@ -107,19 +108,18 @@ public final class MySQLBombard {
         return state;
     }
 
-    private void reconnect(MySQLGlobalState state) {
+    private boolean connect(MySQLGlobalState state) {
         closeQuietly(state);
-        while (!Thread.currentThread().isInterrupted()) {
-            try {
-                state.setConnection(provider.createDatabaseConnection(options, databaseName));
-                refreshSchema(state);
-                return;
-            } catch (SQLException e) {
-                closeQuietly(state);
-                sleepQuietly();
-            } catch (Throwable ignored) {
-                sleepQuietly();
-            }
+        try {
+            state.setConnection(provider.createDatabaseConnection(options, databaseName));
+            refreshSchema(state);
+            return true;
+        } catch (SQLException e) {
+            closeQuietly(state);
+            return false;
+        } catch (Throwable ignored) {
+            closeQuietly(state);
+            return false;
         }
     }
 
@@ -169,11 +169,4 @@ public final class MySQLBombard {
         return false;
     }
 
-    private void sleepQuietly() {
-        try {
-            Thread.sleep(RECONNECT_SLEEP_MS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-    }
 }
