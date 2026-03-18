@@ -13,6 +13,7 @@ import sqlancer.MainOptions;
 import sqlancer.Randomly;
 import sqlancer.SQLConnection;
 import sqlancer.common.query.SQLQueryAdapter;
+import sqlancer.mysql.gen.MySQLTableGenerator;
 
 public final class MySQLBombard {
 
@@ -36,11 +37,7 @@ public final class MySQLBombard {
     public void run() throws Exception {
         try (SQLConnection con = provider.createDatabase(options, databaseName)) {
             Main.nrDatabases.incrementAndGet();
-            try {
-                MySQLSchema.fromConnection(con, databaseName);
-            } catch (SQLException ignored) {
-                // Let workers retry metadata reads on their own connections.
-            }
+            bootstrapDatabase(con);
         }
 
         int workerCount = Math.max(1, mysqlOptions.getMySQLBombardWorkers());
@@ -106,6 +103,24 @@ public final class MySQLBombard {
         state.setRandomly(new Randomly(seed + workerId + 1L));
         state.setState(provider.getStateToReproduce(databaseName));
         return state;
+    }
+
+    private void bootstrapDatabase(SQLConnection con) {
+        MySQLGlobalState state = createWorkerState(-1);
+        state.setConnection(con);
+        try {
+            refreshSchema(state);
+            int targetTables = state.getRandomly().getInteger(1, 3);
+            for (int i = state.getSchema().getDatabaseTables().size(); i < targetTables; i++) {
+                SQLQueryAdapter createTable = MySQLTableGenerator.generate(state, String.format("tb_bootstrap_%d", i));
+                createTable.execute(state, false);
+                refreshSchemaQuietly(state);
+            }
+        } catch (Exception ignored) {
+            refreshSchemaQuietly(state);
+        } finally {
+            state.setConnection(null);
+        }
     }
 
     private boolean connect(MySQLGlobalState state) {

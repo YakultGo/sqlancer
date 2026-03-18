@@ -4,7 +4,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -44,6 +44,8 @@ import sqlancer.mysql.gen.tblmaintenance.MySQLRepair;
 
 @AutoService(DatabaseProvider.class)
 public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOptions> {
+
+    private static final int BOMBARD_MAX_TABLES = 6;
 
     public MySQLProvider() {
         super(MySQLGlobalState.class, MySQLOptions.class);
@@ -141,7 +143,8 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
 
     public SQLQueryAdapter getQueryForBombard(MySQLGlobalState globalState, long workerId, long sequence)
             throws Exception {
-        if (globalState.getSchema().getDatabaseTables().isEmpty() || Randomly.getBooleanWithSmallProbability()) {
+        int tableCount = globalState.getSchema().getDatabaseTables().size();
+        if (tableCount < BOMBARD_MAX_TABLES && shouldCreateBombardTable(tableCount)) {
             return MySQLTableGenerator.generate(globalState, getBombardTableName(workerId, sequence));
         }
         if (Randomly.getBoolean()) {
@@ -149,9 +152,47 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
                     .asString(MySQLRandomQuerySynthesizer.generate(globalState, Randomly.smallNumber() + 1)) + ";";
             return new SQLQueryAdapter(query);
         }
-        List<Action> eligibleActions = Arrays.stream(Action.values()).filter(action -> action != Action.RESET)
-                .collect(Collectors.toList());
-        return Randomly.fromList(eligibleActions).getQuery(globalState);
+        return getWeightedBombardAction(globalState).getQuery(globalState);
+    }
+
+    private boolean shouldCreateBombardTable(int tableCount) {
+        if (tableCount == 0) {
+            return false;
+        }
+        if (tableCount < 2) {
+            return Randomly.getBooleanWithSmallProbability();
+        }
+        return tableCount < BOMBARD_MAX_TABLES && Randomly.getBooleanWithRatherLowProbability();
+    }
+
+    private Action getWeightedBombardAction(MySQLGlobalState globalState) {
+        List<Action> availableActions = new ArrayList<>();
+        List<Integer> weights = new ArrayList<>();
+        int totalWeight = 0;
+        for (Action action : Action.values()) {
+            if (action == Action.RESET) {
+                continue;
+            }
+            int weight = mapActions(globalState, action);
+            if (weight <= 0) {
+                continue;
+            }
+            availableActions.add(action);
+            weights.add(weight);
+            totalWeight += weight;
+        }
+        if (availableActions.isEmpty()) {
+            throw new AssertionError("No bombard actions available");
+        }
+        int selection = globalState.getRandomly().getInteger(0, totalWeight);
+        int current = 0;
+        for (int i = 0; i < availableActions.size(); i++) {
+            current += weights.get(i);
+            if (selection < current) {
+                return availableActions.get(i);
+            }
+        }
+        return availableActions.get(availableActions.size() - 1);
     }
 
     private static String getBombardTableName(long workerId, long sequence) {
