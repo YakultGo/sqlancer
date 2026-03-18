@@ -47,6 +47,12 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
 
     private static final int BOMBARD_MAX_TABLES = 6;
 
+    private enum BombardProfile {
+        SELECT_HEAVY,
+        DML_HEAVY,
+        DDL_HEAVY
+    }
+
     public MySQLProvider() {
         super(MySQLGlobalState.class, MySQLOptions.class);
     }
@@ -144,15 +150,29 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
     public SQLQueryAdapter getQueryForBombard(MySQLGlobalState globalState, long workerId, long sequence)
             throws Exception {
         int tableCount = globalState.getSchema().getDatabaseTables().size();
+        BombardProfile profile = getBombardProfile(workerId);
         if (tableCount < BOMBARD_MAX_TABLES && shouldCreateBombardTable(tableCount)) {
             return MySQLTableGenerator.generate(globalState, getBombardTableName(workerId, sequence));
         }
-        if (Randomly.getBoolean()) {
+        if (shouldGenerateSelect(profile, globalState.getRandomly())) {
             String query = MySQLVisitor
                     .asString(MySQLRandomQuerySynthesizer.generate(globalState, Randomly.smallNumber() + 1)) + ";";
             return new SQLQueryAdapter(query);
         }
-        return getWeightedBombardAction(globalState).getQuery(globalState);
+        return getWeightedBombardAction(globalState, profile).getQuery(globalState);
+    }
+
+    private BombardProfile getBombardProfile(long workerId) {
+        switch ((int) Math.floorMod(workerId, 3)) {
+        case 0:
+            return BombardProfile.SELECT_HEAVY;
+        case 1:
+            return BombardProfile.DML_HEAVY;
+        case 2:
+            return BombardProfile.DDL_HEAVY;
+        default:
+            throw new AssertionError(workerId);
+        }
     }
 
     private boolean shouldCreateBombardTable(int tableCount) {
@@ -165,7 +185,20 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
         return tableCount < BOMBARD_MAX_TABLES && Randomly.getBooleanWithRatherLowProbability();
     }
 
-    private Action getWeightedBombardAction(MySQLGlobalState globalState) {
+    private boolean shouldGenerateSelect(BombardProfile profile, Randomly randomly) {
+        switch (profile) {
+        case SELECT_HEAVY:
+            return randomly.getInteger(0, 100) < 70;
+        case DML_HEAVY:
+            return randomly.getInteger(0, 100) < 25;
+        case DDL_HEAVY:
+            return randomly.getInteger(0, 100) < 20;
+        default:
+            throw new AssertionError(profile);
+        }
+    }
+
+    private Action getWeightedBombardAction(MySQLGlobalState globalState, BombardProfile profile) {
         List<Action> availableActions = new ArrayList<>();
         List<Integer> weights = new ArrayList<>();
         int totalWeight = 0;
@@ -173,7 +206,7 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
             if (action == Action.RESET) {
                 continue;
             }
-            int weight = mapActions(globalState, action);
+            int weight = adjustBombardWeight(profile, action, mapActions(globalState, action));
             if (weight <= 0) {
                 continue;
             }
@@ -193,6 +226,46 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
             }
         }
         return availableActions.get(availableActions.size() - 1);
+    }
+
+    private int adjustBombardWeight(BombardProfile profile, Action action, int weight) {
+        switch (profile) {
+        case SELECT_HEAVY:
+            if (isDDLAction(action)) {
+                return Math.max(1, weight / 2);
+            }
+            if (isDMLAction(action)) {
+                return Math.max(1, weight);
+            }
+            return Math.max(1, weight / 2);
+        case DML_HEAVY:
+            if (isDMLAction(action)) {
+                return Math.max(1, weight * 2);
+            }
+            if (isDDLAction(action)) {
+                return Math.max(1, weight / 2);
+            }
+            return Math.max(1, weight / 2);
+        case DDL_HEAVY:
+            if (isDDLAction(action)) {
+                return Math.max(1, weight * 2);
+            }
+            if (isDMLAction(action)) {
+                return Math.max(1, weight / 2);
+            }
+            return Math.max(1, weight);
+        default:
+            throw new AssertionError(profile);
+        }
+    }
+
+    private boolean isDMLAction(Action action) {
+        return action == Action.INSERT || action == Action.UPDATE || action == Action.DELETE;
+    }
+
+    private boolean isDDLAction(Action action) {
+        return action == Action.CREATE_INDEX || action == Action.ALTER_TABLE || action == Action.TRUNCATE_TABLE
+                || action == Action.DROP_INDEX;
     }
 
     private static String getBombardTableName(long workerId, long sequence) {
