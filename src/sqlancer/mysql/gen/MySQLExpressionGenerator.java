@@ -258,7 +258,6 @@ public class MySQLExpressionGenerator extends UntypedExpressionGenerator<MySQLEx
 
     public MySQLAggregate generateAggregate() {
         MySQLAggregateFunction func = Randomly.fromOptions(MySQLAggregateFunction.values());
-
         if (func.isVariadic()) {
             int nrExprs = Randomly.smallNumber() + 1;
             List<MySQLExpression> exprs = IntStream.range(0, nrExprs).mapToObj(index -> generateExpression())

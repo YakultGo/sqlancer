@@ -17,7 +17,7 @@ import sqlancer.mysql.gen.MySQLTableGenerator;
 
 public final class MySQLBombard {
 
-    private static final int SCHEMA_REFRESH_INTERVAL = 100;
+    private static final int SCHEMA_REFRESH_INTERVAL = 10;
 
     private final MySQLProvider provider;
     private final MainOptions options;

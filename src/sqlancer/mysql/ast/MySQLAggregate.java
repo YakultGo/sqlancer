@@ -12,7 +12,29 @@ public class MySQLAggregate implements MySQLExpression {
         // See https://dev.mysql.com/doc/refman/8.4/en/aggregate-functions.html#function_min.
         MIN("MIN", null, false), MIN_DISTINCT("MIN", "DISTINCT", false),
         // See https://dev.mysql.com/doc/refman/8.4/en/aggregate-functions.html#function_max.
-        MAX("MAX", null, false), MAX_DISTINCT("MAX", "DISTINCT", false);
+        MAX("MAX", null, false), MAX_DISTINCT("MAX", "DISTINCT", false),
+        // See https://dev.mysql.com/doc/refman/8.4/en/aggregate-functions.html#function_bit-and.
+        BIT_AND("BIT_AND", null, false),
+        // See https://dev.mysql.com/doc/refman/8.4/en/aggregate-functions.html#function_bit-or.
+        BIT_OR("BIT_OR", null, false),
+        // See https://dev.mysql.com/doc/refman/8.4/en/aggregate-functions.html#function_bit-xor.
+        BIT_XOR("BIT_XOR", null, false),
+        // See https://dev.mysql.com/doc/refman/8.4/en/aggregate-functions.html#function_std.
+        STD("STD", null, false),
+        // See https://dev.mysql.com/doc/refman/8.4/en/aggregate-functions.html#function_stddev.
+        STDDEV("STDDEV", null, false),
+        // See https://dev.mysql.com/doc/refman/8.4/en/aggregate-functions.html#function_stddev-pop.
+        STDDEV_POP("STDDEV_POP", null, false),
+        // See https://dev.mysql.com/doc/refman/8.4/en/aggregate-functions.html#function_stddev-samp.
+        STDDEV_SAMP("STDDEV_SAMP", null, false),
+        // See https://dev.mysql.com/doc/refman/8.4/en/aggregate-functions.html#function_var-pop.
+        VAR_POP("VAR_POP", null, false),
+        // See https://dev.mysql.com/doc/refman/8.4/en/aggregate-functions.html#function_var-samp.
+        VAR_SAMP("VAR_SAMP", null, false),
+        // See https://dev.mysql.com/doc/refman/8.4/en/aggregate-functions.html#function_variance.
+        VARIANCE("VARIANCE", null, false),
+        // See https://dev.mysql.com/doc/refman/8.4/en/aggregate-functions.html#function_json-arrayagg.
+        JSON_ARRAYAGG("JSON_ARRAYAGG", null, false);
 
         private final String name;
         private final String option;
