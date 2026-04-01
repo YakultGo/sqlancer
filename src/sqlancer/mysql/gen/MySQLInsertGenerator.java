@@ -11,6 +11,7 @@ import sqlancer.mysql.MySQLErrors;
 import sqlancer.mysql.MySQLGlobalState;
 import sqlancer.mysql.MySQLSchema.MySQLColumn;
 import sqlancer.mysql.MySQLSchema.MySQLTable;
+import sqlancer.mysql.MySQLSchema.MySQLTriggerEvent;
 import sqlancer.mysql.MySQLVisitor;
 
 public class MySQLInsertGenerator {
@@ -26,7 +27,7 @@ public class MySQLInsertGenerator {
     }
 
     public static SQLQueryAdapter insertRow(MySQLGlobalState globalState) throws SQLException {
-        MySQLTable table = globalState.getSchema().getRandomTable();
+        MySQLTable table = globalState.getSchema().getRandomTableWeightedByTrigger(MySQLTriggerEvent.INSERT);
         return insertRow(globalState, table);
     }
 

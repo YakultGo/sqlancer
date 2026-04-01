@@ -8,6 +8,7 @@ import sqlancer.common.query.SQLQueryAdapter;
 import sqlancer.mysql.MySQLErrors;
 import sqlancer.mysql.MySQLGlobalState;
 import sqlancer.mysql.MySQLSchema.MySQLTable;
+import sqlancer.mysql.MySQLSchema.MySQLTriggerEvent;
 import sqlancer.mysql.MySQLVisitor;
 
 public class MySQLDeleteGenerator {
@@ -24,7 +25,7 @@ public class MySQLDeleteGenerator {
     }
 
     private SQLQueryAdapter generate() {
-        MySQLTable randomTable = globalState.getSchema().getRandomTable();
+        MySQLTable randomTable = globalState.getSchema().getRandomTableWeightedByTrigger(MySQLTriggerEvent.DELETE);
         MySQLExpressionGenerator gen = new MySQLExpressionGenerator(globalState).setColumns(randomTable.getColumns());
         ExpectedErrors errors = new ExpectedErrors();
         sb.append("DELETE");

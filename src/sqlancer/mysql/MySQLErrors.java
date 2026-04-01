@@ -62,4 +62,25 @@ public final class MySQLErrors {
         errors.addAll(getInsertUpdateErrors());
     }
 
+    public static List<String> getTriggerErrors() {
+        ArrayList<String> errors = new ArrayList<>();
+
+        errors.add("Trigger already exists");
+        errors.add("There is already a trigger");
+        errors.add("doesn't have a default value");
+        errors.add("cannot be null");
+        errors.add("Data truncation");
+        errors.add("Incorrect integer value");
+        errors.add("Incorrect decimal value");
+        errors.add("Data truncated for column");
+        errors.add("Duplicate entry");
+        errors.add("The value specified for generated column");
+
+        return errors;
+    }
+
+    public static void addTriggerErrors(ExpectedErrors errors) {
+        errors.addAll(getTriggerErrors());
+    }
+
 }

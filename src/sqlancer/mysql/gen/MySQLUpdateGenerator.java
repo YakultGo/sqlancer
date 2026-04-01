@@ -10,6 +10,7 @@ import sqlancer.mysql.MySQLErrors;
 import sqlancer.mysql.MySQLGlobalState;
 import sqlancer.mysql.MySQLSchema.MySQLColumn;
 import sqlancer.mysql.MySQLSchema.MySQLTable;
+import sqlancer.mysql.MySQLSchema.MySQLTriggerEvent;
 import sqlancer.mysql.MySQLVisitor;
 
 public class MySQLUpdateGenerator extends AbstractUpdateGenerator<MySQLColumn> {
@@ -26,7 +27,8 @@ public class MySQLUpdateGenerator extends AbstractUpdateGenerator<MySQLColumn> {
     }
 
     private SQLQueryAdapter generate() throws SQLException {
-        MySQLTable table = globalState.getSchema().getRandomTable(t -> !t.isView());
+        MySQLTable table = globalState.getSchema().getRandomTableWeightedByTrigger(MySQLTriggerEvent.UPDATE,
+                t -> !t.isView());
         List<MySQLColumn> columns = table.getRandomNonEmptyColumnSubset();
         gen = new MySQLExpressionGenerator(globalState).setColumns(table.getColumns());
         sb.append("UPDATE ");
