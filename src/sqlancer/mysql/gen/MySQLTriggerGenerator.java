@@ -84,7 +84,11 @@ public final class MySQLTriggerGenerator {
             MySQLTriggerEvent event) {
         if (timing == MySQLTriggerTiming.BEFORE
                 && (event == MySQLTriggerEvent.INSERT || event == MySQLTriggerEvent.UPDATE)) {
-            MySQLColumn column = baseTable.getRandomColumn();
+            List<MySQLColumn> writableColumns = getWritableColumns(baseTable);
+            if (writableColumns.isEmpty()) {
+                return;
+            }
+            MySQLColumn column = Randomly.fromList(writableColumns);
             specs.add(new TriggerSpec(baseTable, timing, event,
                     String.format("SET NEW.%s = %s", column.getName(), generateSimpleExpression(column, false))));
         }
@@ -105,14 +109,21 @@ public final class MySQLTriggerGenerator {
     }
 
     private String generateInsertInto(MySQLTable table) {
-        List<MySQLColumn> columns = table.getColumns();
+        List<MySQLColumn> columns = getWritableColumns(table);
+        if (columns.isEmpty()) {
+            throw new IgnoreMeException();
+        }
         return String.format("INSERT INTO %s(%s) VALUES(%s)", table.getName(),
                 columns.stream().map(MySQLColumn::getName).collect(Collectors.joining(", ")),
                 columns.stream().map(c -> generateSimpleExpression(c, true)).collect(Collectors.joining(", ")));
     }
 
     private String generateUpdateOtherTable(MySQLTable table) {
-        MySQLColumn updateColumn = table.getRandomColumn();
+        List<MySQLColumn> writableColumns = getWritableColumns(table);
+        if (writableColumns.isEmpty()) {
+            throw new IgnoreMeException();
+        }
+        MySQLColumn updateColumn = Randomly.fromList(writableColumns);
         return String.format("UPDATE %s SET %s = %s WHERE %s", table.getName(), updateColumn.getName(),
                 generateSimpleExpression(updateColumn, false), generateSimplePredicate(table));
     }
@@ -127,6 +138,10 @@ public final class MySQLTriggerGenerator {
             return predicateColumn.getName() + " IS NULL";
         }
         return predicateColumn.getName() + " = " + generateSimpleExpression(predicateColumn, false);
+    }
+
+    private List<MySQLColumn> getWritableColumns(MySQLTable table) {
+        return table.getColumns().stream().filter(c -> !c.getName().startsWith("v")).collect(Collectors.toList());
     }
 
     private String generateSimpleExpression(MySQLColumn column, boolean allowNull) {
